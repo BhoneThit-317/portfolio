@@ -2,8 +2,8 @@
 # Base image
 # -----------------------
 FROM node:18-alpine AS base
-RUN npm install -g pnpm@latest
 WORKDIR /app
+RUN npm install -g pnpm@latest
 
 # -----------------------
 # Dependencies stage
@@ -11,7 +11,8 @@ WORKDIR /app
 FROM base AS deps
 COPY package.json pnpm-lock.yaml* ./
 ENV CI=true
-RUN pnpm install --frozen-lockfile
+# Limit network concurrency to save memory on low-RAM EC2
+RUN pnpm install --frozen-lockfile --network-concurrency 1
 
 # -----------------------
 # Builder stage
@@ -32,10 +33,11 @@ ENV NODE_ENV=production
 RUN addgroup -g 1001 -S nodejs && \
     adduser -S nextjs -u 1001
 
-# Copy build artifacts
+# Copy only necessary build artifacts
 COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+COPY --from=deps /app/node_modules ./node_modules 
 
 # Expose port and run
 EXPOSE 3000
